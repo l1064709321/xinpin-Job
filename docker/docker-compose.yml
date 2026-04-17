@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: xinpin-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: xinpin2026
+      MYSQL_DATABASE: xinpin
+      MYSQL_CHARSET: utf8mb4
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: xinpin-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # MongoDB (for chat messages, logs)
+  mongodb:
+    image: mongo:7
+    container_name: xinpin-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: xinpin
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  # Elasticsearch (for job search)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: xinpin-es
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+
+  # Backend API
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: xinpin-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MYSQL_HOST: mysql
+      MYSQL_USER: root
+      MYSQL_PASSWORD: xinpin2026
+      MYSQL_DATABASE: xinpin
+      REDIS_HOST: redis
+      MONGODB_URI: mongodb://mongodb:27017/xinpin
+      ES_NODE: http://elasticsearch:9200
+    depends_on:
+      - mysql
+      - redis
+      - mongodb
+      - elasticsearch
+    volumes:
+      - ./uploads:/app/uploads
+
+volumes:
+  mysql_data:
+  redis_data:
+  mongo_data:
+  es_data:
