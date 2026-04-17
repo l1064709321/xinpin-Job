@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { query, transaction } from '../../models/mysql/connection.js';
+import { setSmsCode, getSmsCode, checkSmsRateLimit } from '../../models/redis/connection.js';
 import config from '../../config/index.js';
 import { logger } from '../../utils/logger.js';
 
@@ -13,16 +14,20 @@ export async function sendSmsCode(req, res, next) {
       return res.status(400).json({ code: 400, message: '手机号格式不正确' });
     }
 
+    // 频率限制
+    const allowed = await checkSmsRateLimit(phone);
+    if (!allowed) {
+      return res.status(429).json({ code: 429, message: '验证码发送过于频繁，请60秒后再试' });
+    }
+
     const code = String(Math.floor(100000 + Math.random() * 900000));
+
+    // 存储验证码到 Redis（5分钟有效）
+    await setSmsCode(phone, code);
 
     // TODO: 调用短信服务商 API 发送验证码
     // await smsService.send(phone, code);
-
-    // 开发环境直接返回验证码
     logger.info(`[DEV] 验证码: ${phone} -> ${code}`);
-
-    // 存储验证码到 Redis（5分钟有效）
-    // await redis.set(`sms:${phone}`, code, 'EX', 300);
 
     res.json({
       code: 0,
@@ -42,9 +47,11 @@ export async function smsLogin(req, res, next) {
       return res.status(400).json({ code: 400, message: '手机号和验证码不能为空' });
     }
 
-    // TODO: 验证短信验证码
-    // const savedCode = await redis.get(`sms:${phone}`);
-    // if (savedCode !== code) { return res.status(400).json({ code: 400, message: '验证码错误或已过期' }); }
+    // 验证短信验证码
+    const savedCode = await getSmsCode(phone);
+    if (!savedCode || savedCode !== code) {
+      return res.status(400).json({ code: 400, message: '验证码错误或已过期' });
+    }
 
     // 查找或创建用户
     let [user] = await query('SELECT * FROM users WHERE phone = ?', [phone]);

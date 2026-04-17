@@ -233,6 +233,20 @@ CREATE TABLE IF NOT EXISTS conversation_members (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='会话成员';
 
+-- 聊天消息
+CREATE TABLE IF NOT EXISTS conversation_messages (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  uuid CHAR(36) NOT NULL UNIQUE,
+  conversation_id BIGINT UNSIGNED NOT NULL,
+  sender_id BIGINT UNSIGNED NOT NULL,
+  content TEXT NOT NULL,
+  msg_type ENUM('text', 'image', 'file', 'system') NOT NULL DEFAULT 'text',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+  FOREIGN KEY (sender_id) REFERENCES users(id),
+  INDEX idx_conv_id (conversation_id, id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='聊天消息表';
+
 -- 系统通知
 CREATE TABLE IF NOT EXISTS notifications (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
